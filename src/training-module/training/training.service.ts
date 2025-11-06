@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common'; // Importe o NotFoundException
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, EntityManager } from 'typeorm'; // 1. Importe EntityManager
 import { TrainingSession } from '../entities/training-session.entity';
 import { TrainingImage } from '../entities/training-image.entity';
 import { Annotation } from '../entities/annotation.entity';
+import { CreateAnnotationDto } from '../dto/create-annotation.dto'; // 2. Importe o DTO
 
-// ... DTO e Construtor ...
 export class CreateTrainingSessionDto {
   name: string;
 }
@@ -13,6 +13,9 @@ export class CreateTrainingSessionDto {
 @Injectable()
 export class TrainingService {
   constructor(
+    // 3. Injete o EntityManager
+    private readonly entityManager: EntityManager,
+
     @InjectRepository(TrainingSession)
     private sessionRepository: Repository<TrainingSession>,
     @InjectRepository(TrainingImage)
@@ -63,5 +66,44 @@ export class TrainingService {
 
     // 3. Salva a imagem no banco de dados
     return this.imageRepository.save(newImage);
+  }
+
+  async getAnnotationsForImage(imageId: string): Promise<Annotation[]> {
+    const image = await this.imageRepository.findOneBy({ id: imageId });
+    if (!image) {
+      throw new NotFoundException(`Imagem com ID ${imageId} não encontrada`);
+    }
+
+    return this.annotationRepository.find({
+      where: { image: { id: imageId } },
+    });
+  }
+
+  async saveAnnotations(
+    imageId: string,
+    annotationsDto: CreateAnnotationDto[],
+  ): Promise<Annotation[]> {
+    // Roda tudo dentro de uma transação
+    return this.entityManager.transaction(async (manager) => {
+      // 1. Encontra a imagem
+      const image = await manager.findOneBy(TrainingImage, { id: imageId });
+      if (!image) {
+        throw new NotFoundException(`Imagem com ID ${imageId} não encontrada`);
+      }
+
+      // 2. Apaga todas as anotações antigas desta imagem
+      await manager.delete(Annotation, { image: { id: imageId } });
+
+      // 3. Cria as novas anotações
+      const newAnnotations = annotationsDto.map((dto) => {
+        return manager.create(Annotation, {
+          ...dto,
+          image: image, // Associa à imagem
+        });
+      });
+
+      // 4. Salva o novo array de anotações
+      return manager.save(Annotation, newAnnotations);
+    });
   }
 }

@@ -7,25 +7,25 @@ import {
     UseInterceptors,
     UploadedFile,
     ParseFilePipe,
+    Param, // 1. Importe Param
+    ParseUUIDPipe, // Para validar que o ID é um UUID
+    ValidationPipe, // Para validar o Body
   } from '@nestjs/common';
   import { TrainingService, CreateTrainingSessionDto } from './training.service';
   import { FileInterceptor } from '@nestjs/platform-express';
   import { diskStorage } from 'multer';
+  import { CreateAnnotationDto } from '../dto/create-annotation.dto'; // 2. Importe o DTO
   
   @Controller('training')
   export class TrainingController {
     constructor(private readonly trainingService: TrainingService) {}
   
-    // GET /training/sessions/recent
-    // (Este método permanece o mesmo)
     @Get('sessions/recent')
     findRecentSessions(@Query('limit') limit: string) {
       const take = limit ? parseInt(limit, 10) : 5;
       return this.trainingService.findRecentSessions(take);
     }
-  
-    // POST /training/sessions
-    // (Este método permanece o mesmo)
+
     @Post('sessions')
     createSession(@Body() createDto: CreateTrainingSessionDto) {
       return this.trainingService.createSession(createDto);
@@ -59,4 +59,19 @@ import {
   
       return this.trainingService.handleFileUpload(file, body.sessionId);
     }
+
+    @Get('images/:imageId/annotations')
+    getAnnotations(@Param('imageId', ParseUUIDPipe) imageId: string) {
+      return this.trainingService.getAnnotationsForImage(imageId);
+    }
+
+    @Post('images/:imageId/annotations')
+    saveAnnotations(
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+    @Body(new ValidationPipe()) // Valida cada item no array
+    annotationsDto: CreateAnnotationDto[],
+  ) {
+    return this.trainingService.saveAnnotations(imageId, annotationsDto);
+  }
+
   }
