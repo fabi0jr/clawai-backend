@@ -3,8 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Detection, DetectionCategory } from '../entities/detection.entity';
 
-// Vamos criar um DTO (Data Transfer Object) para validar os dados que chegam
-// (Opcional por agora, mas boa prática)
 export class CreateDetectionDto {
   type: string;
   category: DetectionCategory;

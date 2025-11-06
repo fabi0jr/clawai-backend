@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Query } from '@nestjs/common';
 import { DetectionsService, CreateDetectionDto } from './detections.service';
 
-@Controller('detections') // Define o prefixo da rota: /detections
+@Controller('detections')
 export class DetectionsController {
   constructor(private readonly detectionsService: DetectionsService) {}
 
