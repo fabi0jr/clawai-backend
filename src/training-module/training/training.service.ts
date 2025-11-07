@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager } from 'typeorm'; // 1. Importe EntityManager
+import { Repository, EntityManager } from 'typeorm';
 import { TrainingSession } from '../entities/training-session.entity';
 import { TrainingImage } from '../entities/training-image.entity';
 import { Annotation } from '../entities/annotation.entity';
-import { CreateAnnotationDto } from '../dto/create-annotation.dto'; // 2. Importe o DTO
+import { CreateAnnotationDto } from '../dto/create-annotation.dto'; 
+import { StartTrainingDto } from '../dto/start-training.dto';
+import { TrainingStatus } from '../entities/training-session.entity';
 
 export class CreateTrainingSessionDto {
   name: string;
@@ -13,7 +15,6 @@ export class CreateTrainingSessionDto {
 @Injectable()
 export class TrainingService {
   constructor(
-    // 3. Injete o EntityManager
     private readonly entityManager: EntityManager,
 
     @InjectRepository(TrainingSession)
@@ -105,5 +106,30 @@ export class TrainingService {
       // 4. Salva o novo array de anotações
       return manager.save(Annotation, newAnnotations);
     });
+  }
+
+  async startTraining(
+    sessionId: string,
+    dto: StartTrainingDto,
+  ): Promise<TrainingSession> {
+    const session = await this.sessionRepository.findOneBy({ id: sessionId });
+    if (!session) {
+      throw new NotFoundException(
+        `Sessão de treinamento com ID ${sessionId} não encontrada`,
+      );
+    }
+
+    // 1. Loga os parâmetros (simulando o início do script Python)
+    console.log('--- INICIANDO TREINAMENTO ---');
+    console.log(`Sessão ID: ${sessionId}`);
+    console.log('Parâmetros Recebidos:');
+    console.log(JSON.stringify(dto, null, 2));
+    console.log('-----------------------------');
+
+    // 2. Atualiza a sessão
+    session.name = dto.itemName || session.name;
+    session.status = TrainingStatus.COMPLETE;
+    
+    return this.sessionRepository.save(session);
   }
 }

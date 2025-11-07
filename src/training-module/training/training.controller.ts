@@ -14,7 +14,8 @@ import {
   import { TrainingService, CreateTrainingSessionDto } from './training.service';
   import { FileInterceptor } from '@nestjs/platform-express';
   import { diskStorage } from 'multer';
-  import { CreateAnnotationDto } from '../dto/create-annotation.dto'; // 2. Importe o DTO
+  import { CreateAnnotationDto } from '../dto/create-annotation.dto';
+  import { StartTrainingDto } from '../dto/start-training.dto';
   
   @Controller('training')
   export class TrainingController {
@@ -30,8 +31,6 @@ import {
     createSession(@Body() createDto: CreateTrainingSessionDto) {
       return this.trainingService.createSession(createDto);
     }
-  
-    // --- NOVO ENDPOINT DE UPLOAD ---
   
     @Post('upload')
     @UseInterceptors(
@@ -50,7 +49,7 @@ import {
     )
     uploadFile(
       @UploadedFile() file: Express.Multer.File,
-      @Body() body: { sessionId: string }, // Recebemos o ID da sessão junto com o arquivo
+      @Body() body: { sessionId: string },
     ) {
       if (!body.sessionId) {
         // (Idealmente, isso seria validado por um DTO)
@@ -73,5 +72,12 @@ import {
   ) {
     return this.trainingService.saveAnnotations(imageId, annotationsDto);
   }
-
+  
+  @Post('sessions/:sessionId/start')
+  startTraining(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Body() startTrainingDto: StartTrainingDto, // O Nest valida o DTO automaticamente
+  ) {
+    return this.trainingService.startTraining(sessionId, startTrainingDto);
   }
+}
