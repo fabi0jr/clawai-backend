@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import { TrainingSession } from '../entities/training-session.entity';
@@ -8,12 +8,16 @@ import { CreateAnnotationDto } from '../dto/create-annotation.dto';
 import { StartTrainingDto } from '../dto/start-training.dto';
 import { TrainingStatus } from '../entities/training-session.entity';
 
+
 export class CreateTrainingSessionDto {
   name: string;
 }
 
+const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
 @Injectable()
 export class TrainingService {
+  private readonly logger = new Logger(TrainingService.name);
   constructor(
     private readonly entityManager: EntityManager,
 
@@ -28,6 +32,9 @@ export class TrainingService {
   // Método para o frontend buscar as sessões recentes (para a sidebar)
   async findRecentSessions(limit = 5): Promise<TrainingSession[]> {
     return this.sessionRepository.find({
+      relations: {
+        images: true,
+      },
       order: {
         createdAt: 'DESC',
       },
@@ -41,7 +48,6 @@ export class TrainingService {
   ): Promise<TrainingSession> {
     const newSession = this.sessionRepository.create({
       name: createDto.name,
-      // O status 'processing' é o padrão, como definido na entidade
     });
     return this.sessionRepository.save(newSession);
   }
@@ -119,17 +125,56 @@ export class TrainingService {
       );
     }
 
-    // 1. Loga os parâmetros (simulando o início do script Python)
-    console.log('--- INICIANDO TREINAMENTO ---');
-    console.log(`Sessão ID: ${sessionId}`);
-    console.log('Parâmetros Recebidos:');
-    console.log(JSON.stringify(dto, null, 2));
-    console.log('-----------------------------');
-
-    // 2. Atualiza a sessão
+    // 1. Atualiza a sessão imediatamente para "processing"
     session.name = dto.itemName || session.name;
-    session.status = TrainingStatus.COMPLETE;
+    session.status = TrainingStatus.PROCESSING; // Muda para 'processing'
+    await this.sessionRepository.save(session);
+
+    this.logger.log(`Iniciando simulação de treinamento para a sessão: ${sessionId}`);
+    this.logger.log(`Parâmetros recebidos: ${JSON.stringify(dto)}`); // Mantém o log original
+
+    // 2. Dispara a simulação EM SEGUNDO PLANO (sem 'await'!)
+    // Usamos .catch() para garantir que qualquer erro na simulação seja logado
+    // e não trave o servidor principal.
+    this._simulateTrainingProcess(session, dto).catch((err) => {
+      this.logger.error(`[SIMULAÇÃO] Erro fatal no processo de simulação: ${err.message}`, err.stack);
+      // Se a simulação falhar, marca a sessão como FAILED
+      session.status = TrainingStatus.FAILED;
+      this.sessionRepository.save(session); // (sem await, "fire-and-forget")
+    });
+
+    // 3. Retorna a sessão com status 'processing' IMEDIATAMENTE
+    return session;
+    }
+
+  private async _simulateTrainingProcess(
+    session: TrainingSession,
+    dto: StartTrainingDto,
+  ) {
+    this.logger.log(`[SIMULAÇÃO] Iniciando preparação de dados para sessão: ${session.id}`);
     
-    return this.sessionRepository.save(session);
+    // 1. Simula a preparação dos dados (ex: 10 segundos)
+    await delay(10000); 
+
+    this.logger.log(`[SIMULAÇÃO] Preparação concluída. Iniciando treinamento do modelo.`);
+    this.logger.log(`[SIMULAÇÃO] Parâmetros: ${dto.epochs} épocas, LR ${dto.learningRate}`);
+
+    // 2. Simula o treinamento real (ex: 30 segundos)
+    await delay(30000);
+
+    this.logger.log(`[SIMULAÇÃO] Treinamento concluído para sessão: ${session.id}`);
+
+    // 3. Atualiza a sessão para 'COMPLETE' no banco
+    try {
+      // Busca a sessão novamente para garantir que estamos com a instância mais recente
+      const finalSession = await this.sessionRepository.findOneBy({ id: session.id });
+      if (finalSession) {
+        finalSession.status = TrainingStatus.COMPLETE;
+        await this.sessionRepository.save(finalSession);
+        this.logger.log(`[SIMULAÇÃO] Sessão ${session.id} marcada como COMPLETE.`);
+      }
+    } catch (err) {
+      this.logger.error(`[SIMULAÇÃO] Falha ao salvar sessão ${session.id} como COMPLETE`, err);
+    }
   }
 }
